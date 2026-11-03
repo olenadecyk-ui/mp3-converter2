@@ -1,0 +1,334 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>My MP3 Converter</title>
+
+<script src="https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.10/dist/umd/ffmpeg.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@ffmpeg/util@0.12.1/dist/umd/index.js"></script>
+
+<style>
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    min-height: 100vh;
+    font-family: Arial, sans-serif;
+    background: #eae7e0;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 20px;
+    color: #333;
+}
+
+.container {
+    background: #fff;
+    width: 100%;
+    max-width: 550px;
+    padding: 45px 35px;
+    border-radius: 18px;
+    text-align: center;
+    box-shadow: 0 8px 30px rgba(0,0,0,0.08);
+}
+
+h1 {
+    font-size: 30px;
+    margin-bottom: 10px;
+}
+
+.subtitle {
+    color: #777;
+    margin-bottom: 35px;
+    line-height: 1.5;
+}
+
+.upload-area {
+    border: 2px dashed #aaa69c;
+    border-radius: 12px;
+    padding: 35px 15px;
+    cursor: pointer;
+    background: #faf9f6;
+    transition: 0.2s;
+}
+
+.upload-area:hover {
+    border-color: #77715f;
+    background: #f1efe9;
+}
+
+.upload-area p {
+    margin: 8px 0;
+}
+
+.upload-icon {
+    font-size: 35px;
+}
+
+input[type="file"] {
+    display: none;
+}
+
+.file-name {
+    margin: 20px 0;
+    font-size: 14px;
+    color: #777;
+    overflow-wrap: anywhere;
+}
+
+button {
+    width: 100%;
+    padding: 15px;
+    border: none;
+    border-radius: 9px;
+    background: #77715f;
+    color: white;
+    font-size: 16px;
+    cursor: pointer;
+    margin-top: 12px;
+    transition: 0.2s;
+}
+
+button:hover {
+    background: #5e594b;
+}
+
+button:disabled {
+    background: #bbb;
+    cursor: not-allowed;
+}
+
+.status {
+    margin-top: 20px;
+    font-size: 14px;
+    color: #777;
+    min-height: 20px;
+}
+
+.download {
+    display: none;
+    background: #667b65;
+    text-decoration: none;
+    color: white;
+    padding: 15px;
+    border-radius: 9px;
+    display: none;
+    margin-top: 15px;
+}
+
+.note {
+    font-size: 12px;
+    color: #999;
+    margin-top: 30px;
+    line-height: 1.6;
+}
+</style>
+</head>
+
+<body>
+
+<div class="container">
+
+    <h1>MP3 Converter</h1>
+
+    <p class="subtitle">
+        Turn your video files into MP3 audio
+    </p>
+
+    <label class="upload-area" for="videoInput">
+        <div class="upload-icon">♫</div>
+        <p><strong>Choose a video file</strong></p>
+        <p style="font-size:13px;color:#999">
+            Or drag and drop it here
+        </p>
+    </label>
+
+    <input type="file" id="videoInput"
+        accept="video/*,.mov,.mp4,.webm,.mkv,.avi">
+
+    <div class="file-name" id="fileName">
+        No file selected
+    </div>
+
+    <button id="convertButton" disabled>
+        Convert to MP3
+    </button>
+
+    <div class="status" id="status">
+        Select a video to get started
+    </div>
+
+    <a id="downloadButton" class="download"
+       download="converted-audio.mp3">
+       Download MP3
+    </a>
+
+    <p class="note">
+        Your files are processed in your browser.
+        They are not uploaded to a conversion server.
+        Only convert videos you own or have permission to use.
+    </p>
+
+</div>
+
+<script type="module">
+
+import { FFmpeg } from
+"https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.10/dist/esm/index.js";
+
+import { toBlobURL } from
+"https://cdn.jsdelivr.net/npm/@ffmpeg/util@0.12.1/dist/esm/index.js";
+
+const ffmpeg = new FFmpeg();
+
+const input = document.getElementById("videoInput");
+const convertButton = document.getElementById("convertButton");
+const fileName = document.getElementById("fileName");
+const status = document.getElementById("status");
+const downloadButton = document.getElementById("downloadButton");
+const uploadArea = document.querySelector(".upload-area");
+
+let selectedFile = null;
+let ffmpegLoaded = false;
+let outputURL = null;
+
+input.addEventListener("change", () => {
+
+    selectedFile = input.files[0];
+
+    if (!selectedFile) return;
+
+    fileName.textContent = selectedFile.name;
+    status.textContent = "Ready to convert";
+    convertButton.disabled = false;
+
+    downloadButton.style.display = "none";
+
+});
+
+uploadArea.addEventListener("dragover", (event) => {
+    event.preventDefault();
+});
+
+uploadArea.addEventListener("drop", (event) => {
+
+    event.preventDefault();
+
+    const file = event.dataTransfer.files[0];
+
+    if (!file) return;
+
+    selectedFile = file;
+    fileName.textContent = file.name;
+    status.textContent = "Ready to convert";
+    convertButton.disabled = false;
+
+    downloadButton.style.display = "none";
+
+});
+
+async function loadFFmpeg() {
+
+    if (ffmpegLoaded) return;
+
+    status.textContent = "Loading converter...";
+
+    const baseURL =
+    "https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/umd";
+
+    await ffmpeg.load({
+        coreURL: await toBlobURL(
+            `${baseURL}/ffmpeg-core.js`,
+            "text/javascript"
+        ),
+        wasmURL: await toBlobURL(
+            `${baseURL}/ffmpeg-core.wasm`,
+            "application/wasm"
+        )
+    });
+
+    ffmpegLoaded = true;
+}
+
+convertButton.addEventListener("click", async () => {
+
+    if (!selectedFile) return;
+
+    convertButton.disabled = true;
+    downloadButton.style.display = "none";
+
+    try {
+
+        await loadFFmpeg();
+
+        status.textContent = "Preparing your video...";
+
+        const extension =
+            selectedFile.name.split(".").pop().toLowerCase();
+
+        const inputName = `input.${extension}`;
+
+        await ffmpeg.writeFile(
+            inputName,
+            new Uint8Array(await selectedFile.arrayBuffer())
+        );
+
+        status.textContent = "Converting to MP3...";
+
+        await ffmpeg.exec([
+            "-i", inputName,
+            "-vn",
+            "-codec:a", "libmp3lame",
+            "-q:a", "2",
+            "output.mp3"
+        ]);
+
+        const data = await ffmpeg.readFile("output.mp3");
+
+        const blob = new Blob([data], {
+            type: "audio/mpeg"
+        });
+
+        if (outputURL) {
+            URL.revokeObjectURL(outputURL);
+        }
+
+        outputURL = URL.createObjectURL(blob);
+
+        downloadButton.href = outputURL;
+
+        const originalName = selectedFile.name
+            .replace(/\.[^/.]+$/, "");
+
+        downloadButton.download = originalName + ".mp3";
+
+        downloadButton.style.display = "block";
+
+        status.textContent = "Conversion complete!";
+
+        await ffmpeg.deleteFile(inputName);
+        await ffmpeg.deleteFile("output.mp3");
+
+    } catch (error) {
+
+        console.error(error);
+
+        status.textContent =
+            "Something went wrong. Try another video file.";
+
+    } finally {
+
+        convertButton.disabled = false;
+
+    }
+
+});
+
+</script>
+
+</body>
+</html>
